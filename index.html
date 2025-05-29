@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cost Calculator</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/file-saver"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 p-4">
+  <div class="max-w-7xl mx-auto">
+    <h1 class="text-2xl font-bold mb-4">โปรแกรมคำนวณต้นทุน</h1>
+
+    <div id="form-sections" class="space-y-6">
+      <!-- กลุ่มวัตถุดิบและค่าแรง -->
+      <div>
+        <h2 class="text-xl font-semibold mb-2">วัตถุดิบและค่าแรง</h2>
+        <div id="materials" class="space-y-2"></div>
+      </div>
+
+      <!-- กลุ่มค่าใช้จ่ายอื่น ๆ -->
+      <div>
+        <h2 class="text-xl font-semibold mb-2">ค่าใช้จ่ายอื่น ๆ</h2>
+        <div id="others" class="space-y-2"></div>
+      </div>
+    </div>
+
+    <!-- ปุ่มต่าง ๆ -->
+    <div class="flex flex-wrap gap-2 my-4">
+      <button onclick="exportJSON()" class="bg-blue-500 text-white px-4 py-2 rounded">Export JSON</button>
+      <input type="file" onchange="importJSON(event)" class="bg-gray-200 px-4 py-2 rounded">
+      <button onclick="exportExcel()" class="bg-green-500 text-white px-4 py-2 rounded">Export Excel</button>
+    </div>
+
+    <!-- สรุปต้นทุน -->
+    <div class="bg-white shadow p-4 rounded">
+      <h2 class="text-xl font-semibold mb-2">สรุปต้นทุน</h2>
+      <p id="total-cost">ต้นทุนรวม: 0 บาท</p>
+      <div id="sale-prices" class="space-y-1 mt-2"></div>
+    </div>
+  </div>
+
+  <script>
+    const materials = ["ผ้าหลัก", "ผ้ารอง", "ซิป", "กระดุม", "แซ็กรังกระดุม", "ผ้ากาว", "ซับใน", "ของตกแต่งหลัก", "ของตกแต่งรอง", "ช่างตัด", "ช่างเย็บ"];
+    const others = ["ค่าขนส่ง", "ค่ากล่อง", "ช่างแพ็ทเทิร์น", "ค่า Admin 1", "ค่า Admin 2", "ค่าถ่ายแบบ", "ค่า ads", "ค่าน้ำมัน", "ค่าระบบ"];
+
+    function createInputRow(name, sectionId) {
+      const container = document.getElementById(sectionId);
+      const row = document.createElement('div');
+      row.className = "grid grid-cols-4 gap-2 items-center";
+      row.innerHTML = `
+        <label class="col-span-1">${name}</label>
+        <input type="number" class="unit border p-1 rounded" placeholder="ราคาต่อหน่วย">
+        <input type="number" class="qty border p-1 rounded" placeholder="จำนวน" value="1">
+        <input type="text" class="total border p-1 rounded bg-gray-100" disabled>
+      `;
+      container.appendChild(row);
+    }
+
+    function updateTotals() {
+      const allInputs = document.querySelectorAll("#form-sections input");
+      let total = 0;
+      document.querySelectorAll("#form-sections > div").forEach(section => {
+        section.querySelectorAll(".grid").forEach(row => {
+          const unit = parseFloat(row.querySelector('.unit').value) || 0;
+          const qty = parseFloat(row.querySelector('.qty').value) || 0;
+          const sum = unit * qty;
+          row.querySelector('.total').value = sum.toFixed(2);
+          total += sum;
+        });
+      });
+      document.getElementById("total-cost").textContent = `ต้นทุนรวม: ${total.toFixed(2)} บาท`;
+      const multipliers = [2, 2.1, 2.2, 2.3, 2.4, 2.5, 3];
+      const salePrices = document.getElementById("sale-prices");
+      salePrices.innerHTML = multipliers.map(m => `ราคาขาย x${m}: ${(total * m).toFixed(2)} บาท`).join("<br>");
+    }
+
+    function exportJSON() {
+      const data = {};
+      document.querySelectorAll("#form-sections > div").forEach(section => {
+        const sectionName = section.querySelector("h2").textContent;
+        data[sectionName] = [];
+        section.querySelectorAll(".grid").forEach(row => {
+          const label = row.querySelector("label").textContent;
+          const unit = row.querySelector(".unit").value;
+          const qty = row.querySelector(".qty").value;
+          data[sectionName].push({ label, unit, qty });
+        });
+      });
+      const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+      saveAs(blob, "cost-data.json");
+    }
+
+    function importJSON(event) {
+      const file = event.target.files[0];
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const data = JSON.parse(e.target.result);
+        document.querySelectorAll("#form-sections > div").forEach(section => {
+          const sectionName = section.querySelector("h2").textContent;
+          const rows = section.querySelectorAll(".grid");
+          if (data[sectionName]) {
+            data[sectionName].forEach((item, i) => {
+              const row = rows[i];
+              row.querySelector(".unit").value = item.unit;
+              row.querySelector(".qty").value = item.qty;
+            });
+          }
+        });
+        updateTotals();
+      };
+      reader.readAsText(file);
+    }
+
+    function exportExcel() {
+      const wb = XLSX.utils.book_new();
+      ["วัตถุดิบและค่าแรง", "ค่าใช้จ่ายอื่น ๆ"].forEach(sectionName => {
+        const data = [["รายการ", "ราคาต่อหน่วย", "จำนวน", "รวม"]];
+        const section = Array.from(document.querySelectorAll("#form-sections > div")).find(sec => sec.querySelector("h2").textContent === sectionName);
+        section.querySelectorAll(".grid").forEach(row => {
+          const label = row.querySelector("label").textContent;
+          const unit = row.querySelector(".unit").value;
+          const qty = row.querySelector(".qty").value;
+          const total = (parseFloat(unit) * parseFloat(qty)).toFixed(2);
+          data.push([label, unit, qty, total]);
+        });
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        XLSX.utils.book_append_sheet(wb, ws, sectionName);
+      });
+      XLSX.writeFile(wb, "cost-data.xlsx");
+    }
+
+    // สร้างช่องกรอกข้อมูล
+    materials.forEach(name => createInputRow(name, "materials"));
+    others.forEach(name => createInputRow(name, "others"));
+
+    // คำนวณอัตโนมัติเมื่อกรอกข้อมูล
+    document.getElementById("form-sections").addEventListener("input", updateTotals);
+  </script>
+</body>
+</html>
