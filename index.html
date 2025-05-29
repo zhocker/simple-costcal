@@ -31,6 +31,9 @@
       <button onclick="exportJSON()" class="bg-blue-500 text-white px-4 py-2 rounded">Export JSON</button>
       <input type="file" onchange="importJSON(event)" class="bg-gray-200 px-4 py-2 rounded">
       <button onclick="exportExcel()" class="bg-green-500 text-white px-4 py-2 rounded">Export Excel</button>
+      <button onclick="exportHistory()" class="bg-yellow-500 text-white px-4 py-2 rounded">Export History</button>
+      <input type="file" onchange="importHistory(event)" class="bg-gray-200 px-4 py-2 rounded">
+      <button onclick="showHistory()" class="bg-purple-500 text-white px-4 py-2 rounded">ดู History</button>
     </div>
 
     <!-- สรุปต้นทุน -->
@@ -39,6 +42,9 @@
       <p id="total-cost">ต้นทุนรวม: 0 บาท</p>
       <div id="sale-prices" class="space-y-1 mt-2"></div>
     </div>
+
+    <!-- ประวัติ -->
+    <div id="history-list" class="mt-4 space-y-2"></div>
   </div>
 
   <script>
@@ -59,7 +65,6 @@
     }
 
     function updateTotals() {
-      const allInputs = document.querySelectorAll("#form-sections input");
       let total = 0;
       document.querySelectorAll("#form-sections > div").forEach(section => {
         section.querySelectorAll(".grid").forEach(row => {
@@ -76,6 +81,12 @@
       salePrices.innerHTML = multipliers.map(m => `ราคาขาย x${m}: ${(total * m).toFixed(2)} บาท`).join("<br>");
     }
 
+    function saveToHistory(data) {
+      const history = JSON.parse(localStorage.getItem('costHistory') || '[]');
+      history.push(data);
+      localStorage.setItem('costHistory', JSON.stringify(history));
+    }
+
     function exportJSON() {
       const data = {};
       document.querySelectorAll("#form-sections > div").forEach(section => {
@@ -88,6 +99,7 @@
           data[sectionName].push({ label, unit, qty });
         });
       });
+      saveToHistory(data);
       const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
       saveAs(blob, "cost-data.json");
     }
@@ -129,6 +141,60 @@
         XLSX.utils.book_append_sheet(wb, ws, sectionName);
       });
       XLSX.writeFile(wb, "cost-data.xlsx");
+    }
+
+    function showHistory() {
+      const history = JSON.parse(localStorage.getItem('costHistory') || '[]');
+      const container = document.getElementById('history-list');
+      container.innerHTML = '';
+      history.forEach((item, index) => {
+        const btn = document.createElement('button');
+        btn.className = 'block bg-gray-200 px-4 py-2 rounded w-full text-left';
+        btn.textContent = `บันทึกที่ ${index + 1}`;
+        btn.onclick = () => loadHistoryItem(item);
+        container.appendChild(btn);
+      });
+    }
+
+    function loadHistoryItem(data) {
+      document.querySelectorAll("#form-sections > div").forEach(section => {
+        const sectionName = section.querySelector("h2").textContent;
+        const rows = section.querySelectorAll(".grid");
+        if (data[sectionName]) {
+          data[sectionName].forEach((item, i) => {
+            const row = rows[i];
+            row.querySelector(".unit").value = item.unit;
+            row.querySelector(".qty").value = item.qty;
+          });
+        }
+      });
+      updateTotals();
+    }
+
+    function exportHistory() {
+      const history = localStorage.getItem('costHistory') || '[]';
+      const blob = new Blob([history], { type: "application/json" });
+      saveAs(blob, "history.json");
+    }
+
+    function importHistory(event) {
+      const file = event.target.files[0];
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const imported = JSON.parse(e.target.result);
+          if (Array.isArray(imported)) {
+            localStorage.setItem('costHistory', JSON.stringify(imported));
+            alert("นำเข้า History เรียบร้อยแล้ว");
+            showHistory();
+          } else {
+            alert("ไฟล์ไม่ถูกต้อง");
+          }
+        } catch {
+          alert("ไฟล์ไม่ถูกต้อง");
+        }
+      };
+      reader.readAsText(file);
     }
 
     // สร้างช่องกรอกข้อมูล
